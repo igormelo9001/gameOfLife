@@ -1,75 +1,133 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const resolution = 10;
+canvas.width = 800;
+canvas.height = 600;
+const COLS = canvas.width / resolution;
+const ROWS = canvas.height / resolution;
 
-const CELL_SIZE = 10; // Tamanho de cada célula
-const WIDTH = 60;     // Número de células na largura
-const HEIGHT = 40;    // Número de células na altura
-canvas.width = WIDTH * CELL_SIZE;
-canvas.height = HEIGHT * CELL_SIZE;
+let grid = buildGrid();
+let generations = 0;
+const generationCounter = document.getElementById('generation-counter');
+let zoomFactor = 1; // Fator inicial de zoom (1 = sem zoom)
+const zoomSpeed = 0.01; // Velocidade de zoom
+const minZoomFactor = 0.1; // Fator de zoom mínimo
 
-let grid = createGrid(WIDTH, HEIGHT);
-let generation = 0;
-
-// Função para criar o grid inicial aleatório
-function createGrid(width, height) {
-  return Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => Math.random() > 0.7 ? 1 : 0)
-  );
+// Função para criar o tabuleiro vazio
+function buildGrid() {
+  return new Array(COLS).fill(null)
+    .map(() => new Array(ROWS).fill(0));
 }
 
-// Função para desenhar o grid no canvas
-function drawGrid(grid) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpa o canvas
-  for (let row = 0; row < HEIGHT; row++) {
-    for (let col = 0; col < WIDTH; col++) {
-      ctx.fillStyle = grid[row][col] === 1 ? 'white' : 'black';
-      ctx.fillRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+// Função para desenhar o tabuleiro com zoom out gradual
+function render(grid) {
+  ctx.save(); // Salva o estado do contexto
+
+  // Aplica o zoom e centraliza o canvas
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.scale(zoomFactor, zoomFactor);
+  ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
+  for (let col = 0; col < grid.length; col++) {
+    for (let row = 0; row < grid[col].length; row++) {
+      const cell = grid[col][row];
+      ctx.beginPath();
+      ctx.rect(col * resolution, row * resolution, resolution, resolution);
+      ctx.fillStyle = cell === 2 ? 'blue' : (cell === 1 ? 'green' : 'white');
+      ctx.fill();
+      ctx.stroke();
     }
   }
+
+  ctx.restore(); // Restaura o estado do contexto
 }
 
-// Função para contar os vizinhos vivos de uma célula
-function countNeighbors(grid, x, y) {
-  let neighbors = 0;
-  for (let i = -1; i <= 1; i++) {
-    for (let j = -1; j <= 1; j++) {
-      if (i === 0 && j === 0) continue; // Ignora a célula atual
-      const row = (x + i + HEIGHT) % HEIGHT; // Garantir que não sai da borda
-      const col = (y + j + WIDTH) % WIDTH;   // Grid toroidal (volta no outro lado)
-      neighbors += grid[row][col];
-    }
-  }
-  return neighbors;
+// Função para copiar o tabuleiro
+function copyGrid(grid) {
+  return grid.map(arr => [...arr]);
 }
 
-// Função para calcular a próxima geração
+// Função para gerar a próxima geração
 function nextGeneration(grid) {
-  const newGrid = grid.map(arr => [...arr]);
-  for (let row = 0; row < HEIGHT; row++) {
-    for (let col = 0; col < WIDTH; col++) {
-      const aliveNeighbors = countNeighbors(grid, row, col);
-      if (grid[row][col] === 1) {
-        if (aliveNeighbors < 2 || aliveNeighbors > 3) {
-          newGrid[row][col] = 0; // Morre por solidão ou superpopulação
-        }
+  const nextGen = buildGrid();
+
+  for (let col = 0; col < grid.length; col++) {
+    for (let row = 0; row < grid[col].length; row++) {
+      const cell = grid[col][row];
+      const numNeighbors = countNeighbors(grid, col, row);
+
+      // Condições para aminoácidos e proteínas
+      if (cell === 1 && numNeighbors < 2) {
+        nextGen[col][row] = 0; // Aminoácido morre
+      } else if (cell === 1 && numNeighbors > 3) {
+        nextGen[col][row] = 0; // Aminoácido morre
+      } else if (cell === 0 && numNeighbors === 3) {
+        nextGen[col][row] = 1; // Aminoácido nasce
       } else {
-        if (aliveNeighbors === 3) {
-          newGrid[row][col] = 1; // Nasce nova célula
+        nextGen[col][row] = cell;
+      }
+
+      // Transformar um grupo de aminoácidos em proteína (azul) sem sair do grid
+      if (numNeighbors >= 4) {
+        if (col > 0 && col < COLS - 1 && row > 0 && row < ROWS - 1) {
+          nextGen[col][row] = 2; // Proteína
         }
       }
     }
   }
-  return newGrid;
+  return nextGen;
 }
 
-// Função para rodar o jogo de forma contínua
-function gameLoop() {
-  drawGrid(grid);
+// Função para contar os vizinhos
+function countNeighbors(grid, col, row) {
+  let sum = 0;
+  const neighbors = [
+    [-1, -1], [-1, 0], [-1, 1],
+    [0, -1],         [0, 1],
+    [1, -1], [1, 0], [1, 1]
+  ];
+  for (let i = 0; i < neighbors.length; i++) {
+    const [x, y] = neighbors[i];
+    const newCol = col + x;
+    const newRow = row + y;
+
+    if (newCol >= 0 && newCol < COLS && newRow >= 0 && newRow < ROWS) {
+      sum += grid[newCol][newRow];
+    }
+  }
+  return sum;
+}
+
+// Função para ajustar o intervalo de atualização e aplicar o zoom out gradual
+function update() {
   grid = nextGeneration(grid);
-  generation++;
-  document.getElementById('generation-counter').textContent = `Generations: ${generation}`;
-  setTimeout(gameLoop, 100); // Chama o próximo frame a cada 100ms
+
+  // Renderiza a nova geração
+  render(grid);
+
+  // Atualiza o contador de gerações
+  generations++;
+  generationCounter.innerText = `Generations: ${generations}`;
+
+  // Aplica o zoom out gradual
+  zoomFactor -= zoomSpeed;
+  if (zoomFactor < minZoomFactor) { // Limite mínimo para o zoom
+    zoomFactor = minZoomFactor; // Impede o zoom de diminuir demais
+  }
+
+  // Atualiza o próximo frame
+  setTimeout(() => requestAnimationFrame(update), 50); // Ajuste o intervalo aqui
 }
 
-// Inicia o jogo
-gameLoop();
+// Inicializa o jogo com alguns aminoácidos aleatórios
+function seedGrid() {
+  for (let col = 0; col < grid.length; col++) {
+    for (let row = 0; row < grid[col].length; row++) {
+      grid[col][row] = Math.floor(Math.random() * 2);
+    }
+  }
+}
+
+// Iniciar o jogo
+seedGrid();
+update(); // Inicia a simulação

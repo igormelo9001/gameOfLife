@@ -1,30 +1,17 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    font-family: Arial, sans-serif;
-    background-color: #282c34;
-    color: white;
-  }
-  
-  h1 {
-    margin-bottom: 20px;
-  }
-  
-  canvas {
-    border: 1px solid white;
-  }
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #f0f0f0;
+  margin: 0;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
 
-  audio {
-    margin-top: 20px; /* Adiciona um espaço acima do player */
-  }
-  
-  
+h1 {
+  margin-bottom: 20px;
+}
+
+#gameCanvas {
+  border: 1px solid #000;
+}
